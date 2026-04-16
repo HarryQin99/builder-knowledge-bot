@@ -10,7 +10,7 @@ Build a working `POST /ask` endpoint that stuffs the entire NCC 2022 Vol 2 PDF i
 - **One service builds the prompt and calls Claude.** `LongContextAnswerService` formats `<document>{CORPUS}</document>\n\nQuestion: {Q}` into the user message, uses Spring AI's `ChatClient` to call Anthropic, reads token usage off `ChatResponse.getMetadata().getUsage()`, and returns `AnswerResponse` with the answer plus metrics.
 - **Thin REST controller, classic Spring layers.** `controller/service/model/config/util` packaging. `POST /ask` takes `{question}` JSON, returns `{answer, metrics: {inputTokens, outputTokens, latencyMs, estimatedCostUsd}}` — answer is the API contract, metrics is sidecar observability that frontends can ignore.
 - **Model: `claude-haiku-4-5`.** Cheapest 4.5-family model (~$0.12/query vs ~$0.46 on Sonnet). Its weaker long-context recall is a feature for Phase 1 — makes failure modes more visible, strengthens the Phase 2 motivation.
-- **Cost table is hardcoded to Haiku pricing only.** YAGNI — add more models when needed.
+- **Pricing lives in a `ModelPricing` enum.** Phase 1 has one entry (Haiku 4.5); adding a model later is a one-line enum addition. The String→enum lookup (`ModelPricing.forModel(configuredId)`) runs once at startup and throws loudly on unknown ids — so a config drift between `application.properties` and the price table fails the boot, not silently miscalculates cost. `CostCalculator.estimate(ModelPricing, in, out)` then takes the enum directly — type-safe, no String typos at the math site.
 - **Measurement surfaces in the response itself.** Metrics embedded in every `POST /ask` response so `curl` iteration is self-documenting. Also logged at INFO.
 - **No honesty layer yet.** System prompt says "use only the provided text", but there's no structured refusal, no `can_answer` flag, no confidence threshold. Phase 3. We *want* Phase 1 to hallucinate on fake-clause questions so Phase 3 has something to fix.
 - **Decision checkpoint after PDF extraction.** If estimated tokens ≥ 190K (Claude's ~200K context minus headroom), stop and surface to Harry — don't silently truncate or swap models.
@@ -31,7 +31,7 @@ Chunking, embeddings, vector store, retrieval (Phase 2). Prompt caching (Phase 5
 - [x] Switch `application.properties` model to `claude-haiku-4-5`
 - [x] Add `spring-boot-starter-validation` to `build.gradle`
 - [x] Create `model/CorpusText`, `model/AskRequest`, `model/AnswerResponse`, `model/AnswerMetrics` records
-- [ ] Create `util/CostCalculator` with Haiku pricing — TDD, pure math
+- [x] Create `util/ModelPricing` enum (Haiku entry) + `util/CostCalculator` with model-keyed lookup — TDD, pure math
 - [ ] Create `config/CorpusLoader` (`@Configuration` + `@Bean CorpusText`) — test with a tiny fixture PDF at `src/test/resources/test-corpus.pdf`
 - [ ] Run loader against the real NCC PDF once — **checkpoint:** if estimated tokens ≥ 190K, stop and surface
 - [ ] Create `service/LongContextAnswerService` — test with mocked `ChatClient`
