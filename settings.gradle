@@ -1,0 +1,7 @@
+plugins {
+	// Auto-downloads JDK toolchains on demand so the build is reproducible
+	// without requiring a specific JDK pre-installed on the dev machine.
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'knowledge-bot'
