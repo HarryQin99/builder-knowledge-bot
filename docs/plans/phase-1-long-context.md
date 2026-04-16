@@ -28,7 +28,7 @@ Chunking, embeddings, vector store, retrieval (Phase 2). Prompt caching (Phase 5
 
 ## TODO
 
-- [ ] Switch `application.properties` model to `claude-haiku-4-5`
+- [x] Switch `application.properties` model to `claude-haiku-4-5`
 - [ ] Add `spring-boot-starter-validation` to `build.gradle`
 - [ ] Create `model/CorpusText`, `model/AskRequest`, `model/AnswerResponse` records
 - [ ] Create `util/CostCalculator` with Haiku pricing — TDD, pure math
