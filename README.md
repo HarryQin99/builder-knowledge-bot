@@ -9,7 +9,7 @@ The goal is not a product. The goal is to understand RAG tradeoffs deeply enough
 NCC 2022 Vol 2 is:
 - **Claude-weak** — Australian regulatory text with numeric clause references (`H3.2(1)(b)`). LLMs routinely hallucinate clause numbers on this content.
 - **Structured** — numbered parts → sections → clauses, each self-contained and citable.
-- **Right-sized** — ~500–700 pages / 200–300K tokens. At the edge of long-context feasibility, which makes the Phase 1 → Phase 2 contrast dramatic.
+- **Right-sized** — 312 pages / ~607K tokens. Too large for long-context (3.2× Claude's 200K window), which makes Phase 2 RAG necessary rather than optional.
 - **High-stakes** — wrong building-code advice has physical consequences, so "fail closed" honesty isn't abstract.
 
 ## Stack
@@ -38,7 +38,7 @@ cp .env.example .env
 
 | Phase | Status | What |
 |---|---|---|
-| 1 — Long-context baseline | scaffolded | stuff entire PDF into prompt, single `/ask` endpoint, note where it breaks |
+| 1 — Long-context baseline | **done** | measured corpus, proved long-context impossible for full NCC — see [findings](docs/observations/phase-1-findings.md) |
 | 2 — Basic RAG | — | pgvector + ingestion + `QuestionAnswerAdvisor` |
 | 3 — Honesty layer | — | strict refusal, structured output with `can_answer`, relative confidence thresholds |
 | 4 — Evaluation harness | — | 30–50 golden Q/A (~20% unanswerable), false-confidence rate as primary metric |
@@ -49,7 +49,20 @@ cp .env.example .env
 _To be filled after each phase._
 
 ### Phase 1 — long-context baseline
-_pending_
+
+The plan was to stuff the entire NCC PDF into every Claude prompt as a baseline. Measurement killed that plan:
+
+| Metric | Value |
+|---|---|
+| Corpus | NCC 2022 Vol 2 (Housing Provisions) |
+| Pages | 312 |
+| Estimated tokens | ~607K |
+| Claude context window | ~200K |
+| **Ratio** | **3.2×** — doesn't fit |
+
+The 190K checkpoint in `CorpusLoader` refused to boot — as designed. No silent truncation, no model swap. The long-context approach fails by construction for a real-world corpus this size.
+
+This is the Phase 2 motivation: chunking + retrieval makes the full corpus queryable within the context budget. See [full findings](docs/observations/phase-1-findings.md).
 
 ### Phase 2 — RAG comparison
 _pending_
