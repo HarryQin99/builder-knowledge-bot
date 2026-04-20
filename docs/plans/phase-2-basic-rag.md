@@ -15,7 +15,7 @@
 - **OpenAI `text-embedding-3-small` for embeddings.** Anthropic doesn't offer an embedding API — need a second provider. OpenAI is cheapest (~$0.02/M tokens), 1536 dimensions. Requires `OPENAI_API_KEY` in `.env`. Spring AI auto-configures `EmbeddingModel` via `spring-ai-starter-model-openai`.
 - **pgvector for vector storage.** `spring-ai-starter-vector-store-pgvector` auto-configures `PgVectorStore`. Schema auto-created at startup (`initialize-schema: true`). HNSW index, cosine distance, dimensions=1536 to match the embedding model.
 - **Docker Compose for local dev.** Two services: `postgres` (pgvector/pgvector:pg16) + `app` (multi-stage Dockerfile). Corpus PDF mounted as read-only volume into app. `.env` feeds both API keys. `docker-compose up --build` is the single command to run everything.
-- **Ingestion runs at startup if vector store is empty.** `IngestionService` checks for existing data on `ApplicationReadyEvent`. If empty: reads the full NCC PDF via `PagePdfDocumentReader`, chunks with `TokenTextSplitter` (default ~800 tokens, no overlap in Spring AI 2.0.0-M4), stores via `VectorStore.add()` (embeddings computed automatically). No versioning, no re-ingestion script — YAGNI. Production approach documented in README's Design Decisions section.
+- **Ingestion uses deterministic content-hash IDs (record-manager pattern).** `IngestionService` runs on `ApplicationReadyEvent` every boot. Reads the NCC PDF via `PagePdfDocumentReader`, chunks with `TokenTextSplitter` (~800 tokens, no overlap), assigns each chunk a SHA-256 ID derived from `source + page + chunk_index + text`. **Pre-checks existing IDs via JDBC** (`SELECT id FROM vector_store WHERE id = ANY(?)`), filters chunks to only genuinely-new ones, then embeds + inserts via `VectorStore.add()`. Result: unchanged re-boots cost ~$0 (no embedding calls); corpus updates are incremental; partial failures are safe to retry. This is LangChain's `index()` equivalent. The decision to couple to pgvector's table name is deliberate — avoiding it would mean re-embedding the corpus every boot.
 - **`QuestionAnswerAdvisor` wires retrieval + augmentation.** Configured on the `ChatClient` as a default advisor. Per question: embeds the question, searches pgvector for top-K similar chunks, injects them into the prompt template, calls Claude. Developer writes zero retrieval code.
 - **Remove Phase 1 long-context artifacts.** `CorpusLoader` and `CorpusText` were for prompt-stuffing — irrelevant for RAG. Replaced by `IngestionService`. Git history preserves Phase 1 code.
 - **Reuse Phase 1 model records.** `AskRequest`, `AnswerResponse`, `AnswerMetrics`, `ModelPricing`, `CostCalculator` carry over unchanged — the response envelope is the same regardless of context source.
@@ -28,6 +28,8 @@
 - `TokenTextSplitter` does NOT support chunk overlap in Spring AI 2.0.0-M4. Uses punctuation-aware sentence boundary splitting instead.
 - `text-embedding-3-small` dimensions (1536) must match `spring.ai.vectorstore.pgvector.dimensions`.
 - `Document.getText()` not `getContent()` in Spring AI 2.0.0-M4.
+- `Document.id` defaults to a random UUID — must be overridden with a deterministic hash to enable pre-check dedup.
+- `PgVectorStore.add()` embeds BEFORE upserting — skipping `add()` entirely is the only way to save embedding cost.
 - `@MockitoBean` replaces deprecated `@MockBean` (Spring Boot 4).
 - `ChatClient` fluent API: `.call().chatResponse()` for full response with metadata; `.call().content()` for just the text.
 
@@ -43,7 +45,7 @@ Structured refusal / `can_answer` / confidence (Phase 3). Golden dataset and aut
 - [x] Update `application.properties` — OpenAI embedding config, datasource, pgvector (dimensions=1536, initialize-schema=true, HNSW), remove page-from/page-to
 - [x] Update `.env.example` with `OPENAI_API_KEY` placeholder
 - [x] Remove Phase 1 long-context artifacts (`CorpusLoader`, `CorpusText`, related tests + helpers)
-- [ ] Create `service/IngestionService` — reads full PDF via `PagePdfDocumentReader`, chunks with `TokenTextSplitter`, stores via `VectorStore.add()`. Triggered on `ApplicationReadyEvent` if store is empty. TDD.
+- [x] Create `service/IngestionService` — reads full PDF via `PagePdfDocumentReader`, chunks with `TokenTextSplitter`, assigns SHA-256 content-hash IDs, pre-checks existing IDs via `JdbcTemplate`, embeds + stores only new chunks via `VectorStore.add()`. Triggered on `ApplicationReadyEvent` every boot. TDD.
 - [ ] Create `config/ChatClientConfig` — builds `ChatClient` from Anthropic `ChatModel` + `QuestionAnswerAdvisor(vectorStore)`
 - [ ] Create `service/AskService` — takes question, calls `ChatClient`, reads token usage from response metadata, computes cost via `CostCalculator`, returns `AnswerResponse`. TDD with mocked `ChatClient`.
 - [ ] Create `controller/AskController` — `POST /ask`, `@Valid @RequestBody AskRequest`, delegates to `AskService`, returns `AnswerResponse`. `@WebMvcTest` with `@MockitoBean`.
