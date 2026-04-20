@@ -37,12 +37,12 @@ Structured refusal / `can_answer` / confidence (Phase 3). Golden dataset and aut
 
 ## TODO
 
-- [ ] Add `spring-ai-starter-model-openai` + `spring-ai-starter-vector-store-pgvector` to `build.gradle`
-- [ ] Create `Dockerfile` (multi-stage: Gradle build → JRE runtime, non-root user) + `.dockerignore`
-- [ ] Create `docker-compose.yml` — `postgres` (pgvector:pg16) + `app` services, corpus volume, `.env` for keys
-- [ ] Update `application.properties` — OpenAI embedding config, datasource, pgvector (dimensions=1536, initialize-schema=true, HNSW), remove page-from/page-to
-- [ ] Update `.env.example` with `OPENAI_API_KEY` placeholder
-- [ ] Remove Phase 1 long-context artifacts (`CorpusLoader`, `CorpusText`, related tests + helpers)
+- [x] Add `spring-ai-starter-model-openai` + `spring-ai-starter-vector-store-pgvector` to `build.gradle`
+- [x] Create `Dockerfile` (multi-stage: Gradle build → JRE runtime, non-root user) + `.dockerignore`
+- [x] Create `docker-compose.yml` — `postgres` (pgvector:pg16) + `app` services, corpus volume, `.env` for keys
+- [x] Update `application.properties` — OpenAI embedding config, datasource, pgvector (dimensions=1536, initialize-schema=true, HNSW), remove page-from/page-to
+- [x] Update `.env.example` with `OPENAI_API_KEY` placeholder
+- [x] Remove Phase 1 long-context artifacts (`CorpusLoader`, `CorpusText`, related tests + helpers)
 - [ ] Create `service/IngestionService` — reads full PDF via `PagePdfDocumentReader`, chunks with `TokenTextSplitter`, stores via `VectorStore.add()`. Triggered on `ApplicationReadyEvent` if store is empty. TDD.
 - [ ] Create `config/ChatClientConfig` — builds `ChatClient` from Anthropic `ChatModel` + `QuestionAnswerAdvisor(vectorStore)`
 - [ ] Create `service/AskService` — takes question, calls `ChatClient`, reads token usage from response metadata, computes cost via `CostCalculator`, returns `AnswerResponse`. TDD with mocked `ChatClient`.
